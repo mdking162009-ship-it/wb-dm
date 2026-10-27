@@ -2,7 +2,7 @@
 const SERVER = 'http://127.0.0.1:28123'
 
 const DEFAULTS = {
-  sites: { facebook: true, instagram: true, youtube: true, pinterest: true, spotify: true },
+  sites: { facebook: true, instagram: true, youtube: true, pinterest: true },
   tipos: { automatico: true, inteligente: true, video: true, musica: true, imagem: true, zip: true, exe: true, apk: true, rar: true }
 }
 
@@ -37,7 +37,6 @@ function siteToggled(url, sites) {
   if (host.endsWith('instagram.com')) return sites.instagram ? null : 'Instagram'
   if (host.endsWith('youtube.com') || host.endsWith('youtu.be')) return sites.youtube ? null : 'YouTube'
   if (host.includes('pinterest.com') || host === 'pin.it') return sites.pinterest ? null : 'Pinterest'
-  if (host.endsWith('spotify.com')) return sites.spotify ? null : 'Spotify'
   return null
 }
 

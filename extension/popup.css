@@ -152,6 +152,19 @@ body {
   text-decoration: underline;
 }
 
+/* definições do app: desligadas enquanto o app não responde */
+.toggles input:disabled + .track {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.hint {
+  margin: 4px 0 0;
+  font-size: 9.5px;
+  color: #8b90a0;
+  text-align: center;
+}
+
 .foot {
   margin: 0;
   text-align: right;

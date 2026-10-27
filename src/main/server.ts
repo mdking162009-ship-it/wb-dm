@@ -28,6 +28,41 @@ export function startCaptureServer(dm: DownloadManager): void {
       return
     }
 
+    // definições do app pro popup da extensão (só o que interessa la)
+    const EXT_KEYS = ['notifyDone', 'notifyFail', 'browserServer'] as const
+
+    if (req.method === 'GET' && req.url?.startsWith('/settings')) {
+      const s = dm.getSettings()
+      const out: Record<string, unknown> = { ok: true, version: app.getVersion() }
+      for (const k of EXT_KEYS) out[k] = s[k]
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(out))
+      return
+    }
+
+    if (req.method === 'POST' && req.url?.startsWith('/settings')) {
+      let body = ''
+      req.on('data', (c) => (body = (body + c).slice(0, 10_000)))
+      req.on('end', () => {
+        try {
+          const data = JSON.parse(body) as Record<string, unknown>
+          const patch: Record<string, boolean> = {}
+          for (const k of EXT_KEYS) {
+            if (typeof data[k] === 'boolean') patch[k] = data[k] as boolean
+          }
+          if (Object.keys(patch).length === 0) throw new Error('nada para mudar')
+          const s = dm.setSettings(patch)
+          // integração desligada: /add passa a negar, o popup mostra logo o estado
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: true, notifyDone: s.notifyDone, notifyFail: s.notifyFail, browserServer: s.browserServer }))
+        } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: 'definição inválida' }))
+        }
+      })
+      return
+    }
+
     if (req.method === 'POST' && req.url?.startsWith('/add')) {
       let body = ''
       req.on('data', (c) => (body = (body + c).slice(0, 100_000)))
@@ -57,7 +92,7 @@ export function startCaptureServer(dm: DownloadManager): void {
         res.writeHead(202, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: true, queued: urls.length }))
         // traz a janela pra frente quando a extensão manda trabalho
-        if (win && !win.isMinimized()) {
+        if (win) {
           if (win.isMinimized()) win.restore()
           win.show()
         }
