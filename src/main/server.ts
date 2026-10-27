@@ -33,8 +33,10 @@ export function startCaptureServer(dm: DownloadManager): void {
       req.on('data', (c) => (body = (body + c).slice(0, 100_000)))
       req.on('end', () => {
         let urls: string[] = []
+        let auto = true
         try {
-          const data = JSON.parse(body) as { urls?: unknown; url?: unknown }
+          const data = JSON.parse(body) as { urls?: unknown; url?: unknown; auto?: unknown }
+          auto = data.auto !== false
           const raw = Array.isArray(data.urls) ? data.urls : [data.url]
           urls = raw.filter((u): u is string => typeof u === 'string')
             .join('\n')
@@ -44,7 +46,9 @@ export function startCaptureServer(dm: DownloadManager): void {
         } catch {
           // corpo invalido
         }
-        void dm.addUrls(urls)
+        // auto=false: a extensao quer que o app pergunte antes ("Baixar todos / Descartar")
+        if (auto) void dm.addUrls(urls)
+        else dm.propose(urls)
         res.writeHead(202, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: true, queued: urls.length }))
         // traz a janela pra frente quando a extensão manda trabalho

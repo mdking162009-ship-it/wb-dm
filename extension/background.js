@@ -75,10 +75,11 @@ async function send(url: string): Promise<void> {
   }
 
   try {
+    // automatico off: o app mostra "Baixar?" em vez de adicionar logo
     const res = await fetch(`${SERVER}/add`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ urls: [url] })
+      body: JSON.stringify({ urls: [url], auto: tipos.automatico })
     })
     if (!res.ok) throw new Error('App negou')
   } catch {
@@ -103,5 +104,11 @@ chrome.runtime.onStartup.addListener(buildMenus)
 chrome.contextMenus.onClicked.addListener((info) => {
   const url = info.linkUrl || info.srcUrl || info.pageUrl
   if (!url) return
-  send(url)
+  // sem Captura Inteligente, so manda link/imagem/video diretos (nao a "pagina toda")
+  const deliberate = Boolean(info.linkUrl || info.srcUrl)
+  chrome.storage.sync.get(['tipos']).then((got) => {
+    const tipos = { ...DEFAULTS.tipos, ...(got.tipos ?? {}) }
+    if (!deliberate && !tipos.inteligente) return
+    send(url)
+  })
 })

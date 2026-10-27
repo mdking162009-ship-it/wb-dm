@@ -1,91 +1,102 @@
 body {
   margin: 0;
-  width: 360px;
+  width: 620px;
+  height: 540px;
   font-family: 'Segoe UI', system-ui, sans-serif;
-  background: #101216;
+  background: #0a0c10;
   color: #eef0f6;
+  user-select: none;
 }
 
 .panel {
-  margin: 12px;
-  border-radius: 14px;
-  background: #14171d;
+  margin: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #14161d;
+  border-radius: 16px;
   border: 1px solid #23262e;
-  padding: 14px 16px 10px;
+  padding: 14px 18px 8px;
+  box-sizing: border-box;
 }
 
 .head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  justify-content: center;
+  gap: 12px;
   margin-bottom: 10px;
 }
 
 .logo {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 2px solid #4a7ce0;
 }
 
 .app-title {
-  font-size: 14px;
-  font-weight: 600;
+  flex: 1;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 500;
+  margin-left: -56px; /* compensa o logo pra título ficar centrado de facto */
 }
 
 .state {
   font-size: 10px;
-  margin-left: auto;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border-radius: 20px;
   background: #23262e;
   color: #8b90a0;
 }
 
-.state.on {
-  background: #17301f;
-  color: #5ad27f;
-}
+.state.on { background: #17301f; color: #5ad27f; }
+.state.off { background: #301717; color: #ff8080; }
 
-.state.off {
-  background: #301717;
-  color: #ff8080;
-}
-
-.cols {
+.split {
+  flex: 1;
   display: flex;
-  gap: 14px;
+  gap: 0;
+  min-height: 0;
 }
 
 .col {
   flex: 1;
+  padding: 0 16px;
+  min-width: 0;
+}
+
+.col-left {
+  border-right: 1px solid #23262e;
+  display: flex;
+  flex-direction: column;
 }
 
 .col h2,
 .links h2 {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13.5px;
+  font-weight: 500;
   text-align: center;
-  margin: 2px 0 8px;
-  color: #aab0c0;
+  margin: 4px 0 12px;
+  color: #e8eaf2;
 }
 
 .toggles .row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 3px 2px;
+  padding: 6px 2px;
 }
 
 .row span {
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
-/* interruptor */
+/* interruptor do prototipo: pista clara, botao azul-escuro */
 .sw {
   position: relative;
-  width: 34px;
-  height: 18px;
+  width: 46px;
+  height: 20px;
   flex: none;
 }
 
@@ -97,7 +108,7 @@ body {
   position: absolute;
   inset: 0;
   border-radius: 20px;
-  background: #2b2f55;
+  background: #232a55;
   transition: background 0.15s;
   cursor: pointer;
 }
@@ -105,38 +116,41 @@ body {
 .sw .track::after {
   content: '';
   position: absolute;
-  right: 2px;
-  top: 2px;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: #eef0f6;
+  top: 2px;
+  background: #b9bde8;
   transition: transform 0.15s;
 }
 
-.sw input:checked + .track::after {
-  transform: translateX(-16px);
+/* ligado: botao fica a direita e pista clara */
+.sw input:checked + .track {
+  background: #c7c9f2;
 }
 
+.sw input:checked + .track::after {
+  background: #232a55;
+  transform: translateX(26px);
+}
+
+/* desligado: botao fica a esquerda, pista escura */
 .sw input:not(:checked) + .track::after {
-  transform: none;
   left: 2px;
-  right: auto;
 }
 
 .links {
-  margin-top: 12px;
-  padding-top: 8px;
+  margin-top: auto;
   border-top: 1px solid #23262e;
+  padding-top: 10px;
 }
 
 .links a {
   display: block;
-  color: #8ea4e8;
+  color: #eef0f6;
   text-decoration: none;
-  font-size: 12.5px;
-  padding: 3px 2px;
-  text-align: center;
+  font-size: 13px;
+  padding: 5px 2px;
 }
 
 .links a:hover {
@@ -144,8 +158,9 @@ body {
 }
 
 .foot {
-  margin: 10px 0 0;
+  margin: 0;
   text-align: right;
-  font-size: 9.5px;
+  font-size: 9px;
   color: #6d7280;
+  padding-top: 6px;
 }

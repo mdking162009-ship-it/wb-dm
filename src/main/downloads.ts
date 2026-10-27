@@ -622,6 +622,29 @@ export class DownloadManager {
   // capturador de links (clipboard)
   // -------------------------------------------------------------------
 
+  // estilo capturador: mostra o toast "Baixar todos / Descartar" sem adicionar
+  propose(raw: string[]): void {
+    const urls = raw.filter((u) => {
+      try {
+        return ['http:', 'https:'].includes(new URL(u).protocol)
+      } catch {
+        return false
+      }
+    })
+    const guesses = urls
+      .map((u) => {
+        const g = guessInfo(u)
+        return g ? { url: u, ...g } : null
+      })
+      .filter((g): g is NonNullable<typeof g> => g !== null)
+    if (guesses.length === 0) return
+    const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && w.isVisible())
+    if (win && !win.webContents.isDestroyed()) {
+      win.webContents.send('links:captured', guesses)
+      win.show()
+    }
+  }
+
   private syncCapture(): void {
     if (this.settings.captureClipboard && !this.captureTimer) {
       clipboard.readText().then((t) => (this.lastClipboard = t))
