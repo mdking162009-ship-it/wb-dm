@@ -25,6 +25,24 @@ tipo e monitoriza a área de transferência para capturar links automaticamente.
 > O Windows SmartScreen pode avisar na primeira abertura (o instalador ainda não tem
 > certificado de assinatura). Clica em "Mais informações" → "Executar assim mesmo".
 
+## Extensão do navegador
+
+O WB-DM tem uma extensão que captura links directamente no Chrome/Edge/Brave/Opera
+(botão direito → "Baixar com WB-DM", além de captura inteligente de páginas).
+
+Como a extensão ainda não está na Chrome Web Store, instala por ficheiro:
+
+1. Baixa o `wb-dm-extensao-1.0.0.zip` da [Release](../../releases) e deszipa numa
+   pasta definitiva (ex.: `C:\WB-DM\extensao`)
+2. Abre `chrome://extensions` (no Edge: `edge://extensions`)
+3. Activa o **Modo de programador/Programador** (canto superior direito)
+4. Clica **"Carregar sem compactação" / "Carregar descompactada"** e escolhe a pasta
+5. Abre o WB-DM no PC e copia um link — deve aparecer na lista
+
+> A extensão fala com o app por um servidor local (`127.0.0.1:28123`): nada sai do
+> teu computador. Se as definições do popup tiverem os interruptores bloqueados,
+> é porque o app não está aberto — abre-o primeiro.
+
 ## Compilar a partir do código-fonte
 
 ```bash
