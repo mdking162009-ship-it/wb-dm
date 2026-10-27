@@ -112,3 +112,50 @@ chrome.contextMenus.onClicked.addListener((info) => {
     send(url)
   })
 })
+
+// achados do captura inteligente (content.js)
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg?.type !== 'wb-smart' || !Array.isArray(msg.urls)) return
+  chrome.storage.sync.get(['tipos', 'sites']).then((got) => {
+    const tipos = { ...DEFAULTS.tipos, ...(got.tipos ?? {}) }
+    if (!tipos.inteligente || !tipos.automatico) return
+    let sent = false
+    for (const url of msg.urls) {
+      try {
+        // filtro de tipos mantem-se; sites genericos passam sempre
+        captureByType(url, tipos)
+        sent = true
+      } catch {
+        // url invalido, segue
+      }
+    }
+    if (sent) {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icon128.png',
+        title: 'WB-DM — downloads encontrados',
+        message: `${msg.urls.length} link(s) detetado(s) na página → WB-DM a baixar`
+      })
+    }
+  })
+})
+
+// manda pro app se o tipo de captura estiver ligado
+function captureByType(url: string, tipos): void {
+  const exts = ext(url)
+  let tipoOk = false
+  if (isVideoUrl(url)) tipoOk = tipos.video
+  else if (isAudioUrl(url)) tipoOk = tipos.musica
+  else if (isImageURL(url)) tipoOk = tipos.imagem
+  else if (TYPE_EXTS.zip.includes(exts)) tipoOk = tipos.zip
+  else if (TYPE_EXTS.exe.includes(exts)) tipoOk = tipos.exe
+  else if (TYPE_EXTS.apk.includes(exts)) tipoOk = tipos.apk
+  else if (TYPE_EXTS.rar.includes(exts)) tipoOk = tipos.rar
+  if (!tipoOk) return
+  fetch(`${SERVER}/add`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ urls: [url], auto: true })
+  }).catch(() => {})
+}
+

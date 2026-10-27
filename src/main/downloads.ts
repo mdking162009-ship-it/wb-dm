@@ -1,4 +1,4 @@
-import { app, BrowserWindow, DownloadItem, dialog, ipcMain, session, shell, clipboard } from 'electron'
+import { app, BrowserWindow, DownloadItem, dialog, ipcMain, session, shell, clipboard, Notification } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
@@ -603,6 +603,16 @@ export class DownloadManager {
 
   private finish(info: DownloadInfo): void {
     this.emit(info.status === 'completed' ? 'completed' : 'interrupted', info)
+    // aviso flutuante do windows quando termina (baixar automatico: sem perguntas, so o fim)
+    if (info.status === 'completed' && Notification.isSupported()) {
+      const n = new Notification({
+        title: 'WB-DM — Download concluído',
+        body: `${info.filename} salvou em ${this.folder}`,
+        icon: join(__dirname, '../../build/icon.ico')
+      })
+      n.on('click', () => shell.showItemInFolder(info.savePath || this.folder))
+      n.show()
+    }
     this.byUrl.delete(info.url)
     this.startQueue()
   }
