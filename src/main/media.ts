@@ -1,8 +1,7 @@
 // downloads de midia (youtube, pinterest, instagram, facebook, tiktok, soundcloud)
 // via yt-dlp: suporta videos paginas completas e playlists
 import { spawn, ChildProcess } from 'child_process'
-import { createWriteStream, existsSync, mkdirSync } from 'fs'
-import { pipeline } from 'stream'
+import { existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { app } from 'electron'
 import type { MediaHost } from './host'
@@ -120,9 +119,33 @@ export class MediaHandler {
     mkdirSync(dir, { recursive: true })
     const target = join(dir, 'yt-dlp.exe')
     const res = await fetch(YTDLP_URL)
-    if (!res.ok || !res.body) throw new Error(`GitHub respondeu HTTP ${res.status}`)
-    await pipeline(res.body as never, createWriteStream(target))
-    this.bin = target
+    if (!res.ok) throw new Error(`GitHub respondeu HTTP ${res.status}`)
+    // buffer em memoria: evita o malabarismo de streams Web->Node
+    const buf = Buffer.from(await res.arrayBuffer())
+    writeFileSync(target, buf)
+    // o windows/antivirus segura o ficheiro acabado de nascer: confirma que da pra executar
+    for (let i = 0; i < 5; i++) {
+      const ok = await this.spawnsOk(target)
+      if (ok) {
+        this.bin = target
+        return
+      }
+      await new Promise((r) => setTimeout(r, 1500))
+    }
+    throw new Error('O yt-dlp descarregou mas o Windows não o deixou executar (antivírus?)')
+  }
+
+  private spawnsOk(bin: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      try {
+        const child = spawn(bin, ['--version'], { windowsHide: true })
+        child.on('error', () => resolve(false))
+        child.stdout?.on('data', () => {})
+        child.on('close', () => resolve(true))
+      } catch {
+        resolve(false)
+      }
+    })
   }
 
   // chamado 1x por sessão em segundo plano pro primeiro download de midia não esperar
