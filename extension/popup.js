@@ -24,7 +24,7 @@ const DEFAULTS = {
   tipos: Object.fromEntries(TIPO_LABELS.map(([k]) => [k, true]))
 }
 
-function buildToggle(container, group, key, label): void {
+function buildToggle(container, group, key, label) {
   const row = document.createElement('label')
   row.className = 'row'
   row.innerHTML = `<span>${label}</span><span class="sw"><input type="checkbox" data-group="${group}" data-key="${key}"><span class="track"></span></span>`
@@ -42,7 +42,7 @@ async function init(): Promise<void> {
   SITE_LABELS.forEach(([k, label]) => buildToggle(siteToggles, 'sites', k, label))
   TIPO_LABELS.forEach(([k, label]) => buildToggle(tipoToggles, 'tipos', k, label))
 
-  const inputs = document.querySelectorAll<HTMLInputElement>('input[type=checkbox]')
+  const inputs = document.querySelectorAll('input[type=checkbox]')
   for (const input of Array.from(inputs)) {
     const group = input.dataset.group
     const key = input.dataset.key
