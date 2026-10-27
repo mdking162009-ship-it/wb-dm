@@ -240,6 +240,7 @@ export class MediaHandler {
         bin = await this.ensureBin()
       } catch (err2) {
         const msg = err2 instanceof Error ? err2.message : 'falha desconhecida'
+        slog(`enqueue-fail ${url.slice(0, 80)} :: ${msg}`)
         const item = this.host.registerItem(url, 'media', 'videos', msg)
         if (item) this.host.finishItem(item.id, 'interrupted', { error: msg })
         return
@@ -251,6 +252,7 @@ export class MediaHandler {
       meta = await this.probe(bin, url)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'yt-dlp falhou a analisar o link'
+      slog(`probe-fail ${url.slice(0, 80)} :: ${msg}`)
       const item = this.host.registerItem(url, 'media', 'videos', msg)
       if (item) this.host.finishItem(item.id, 'interrupted', { error: msg })
       return

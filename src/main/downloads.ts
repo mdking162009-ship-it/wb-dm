@@ -126,6 +126,17 @@ function extFromMime(mime?: string | null): string {
   return MIME_EXT[mime.split(';')[0].trim().toLowerCase()] ?? ''
 }
 
+// categoria a partir de nome de ficheiro (não URL!)
+function catOfName(name: string): string {
+  const dot = name.lastIndexOf('.')
+  const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : ''
+  if (!ext) return 'outros'
+  for (const [cat, exts] of Object.entries(EXT)) {
+    if (exts.includes(ext)) return cat
+  }
+  return 'outros'
+}
+
 function catOf(url: string): string {
   const ext = extOf(url)
   if (!ext) return 'outros'
@@ -529,7 +540,7 @@ export class DownloadManager {
       if (probe.ok && probe.total > 0) {
         if (!info.filename.includes('.')) {
           info.filename += extFromMime(probe.type)
-          const catNow = catOf(info.filename)
+          const catNow = catOfName(info.filename)
           if (catNow !== info.category) {
             info.category = catNow
             info.dir = this.settings.subfolders
@@ -653,7 +664,7 @@ export class DownloadManager {
     }
     info.filename = finalName
     // recategoriza com o nome final: imagem sem extensao no URL cai na pasta certa
-    const catNow = catOf(finalName)
+    const catNow = catOfName(finalName)
     if (catNow !== info.category) {
       info.category = catNow
       info.dir = this.settings.subfolders
