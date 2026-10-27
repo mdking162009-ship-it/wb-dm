@@ -2,8 +2,8 @@
 // e avisa quando existir versao mais nova que a instalada
 import { BrowserWindow, app, ipcMain } from 'electron'
 
-// troca aqui quando o repositorio do github estiver criado, ex.: 'mamonamd/wb-dm'
-const GITHUB_REPO = 'mamonamd/wb-dm'
+// repositorio das releases: usado pelo verificador de atualizacoes
+const GITHUB_REPO = 'mdking162009-ship-it/wb-dm'
 
 const FIRST_CHECK_MS = 15_000
 const CHECK_EVERY_MS = 6 * 60 * 60 * 1000
