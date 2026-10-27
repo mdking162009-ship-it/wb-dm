@@ -3,7 +3,8 @@
 import { spawn, ChildProcess } from 'child_process'
 import { existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import { app } from 'electron'
+import { app, net } from 'electron'
+import { isNetError } from './net'
 import type { MediaHost } from './host'
 
 const YTDLP_URL = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
@@ -65,6 +66,8 @@ export class MediaHandler {
   private tasks = new Map<string, Task>()
   private pending: string[] = []
   private running = 0
+  private networkPaused = new Set<string>()
+  private netWatch: ReturnType<typeof setInterval> | undefined
 
   constructor(host: MediaHost) {
     this.host = host
@@ -230,13 +233,38 @@ export class MediaHandler {
     this.pump()
   }
 
-  private probe(bin: string, url: string): Promise<{
+  // node serve de JS runtime pro yt-dlp (youtube: formatos completos e sem warns)
+  private nodeExe: string | null | undefined
+
+  private jsRuntimeArgs(): Promise<string[]> {
+    return new Promise((resolve) => {
+      if (this.nodeExe !== undefined) {
+        resolve(this.nodeExe ? ['--js-runtimes', `node:${this.nodeExe}`] : [])
+        return
+      }
+      const where = spawn('where', ['node'], { windowsHide: true })
+      let out = ''
+      where.stdout?.on('data', (c) => (out += c))
+      where.on('close', (code) => {
+        const first = out.split(/\r?\n/)[0]?.trim()
+        this.nodeExe = code === 0 && first ? first : null
+        resolve(this.nodeExe ? ['--js-runtimes', `node:${this.nodeExe}`] : [])
+      })
+      where.on('error', () => {
+        this.nodeExe = null
+        resolve([])
+      })
+    })
+  }
+
+  private async probe(bin: string, url: string): Promise<{
     title?: string
     category: string
     entries: Array<{ url: string; title?: string }>
   }> {
+    const rt = await this.jsRuntimeArgs()
     return new Promise((resolve, reject) => {
-      const child = spawn(bin, ['-J', '--flat-playlist', '--no-warnings', url], { windowsHide: true })
+      const child = spawn(bin, ['-J', '--flat-playlist', '--no-warnings', ...rt, url], { windowsHide: true })
       let out = ''
       let er = ''
       const timer = setTimeout(() => {
@@ -295,16 +323,31 @@ export class MediaHandler {
     }
   }
 
-  private startTask(task: Task): void {
+  // vigia a rede: quando volta, retoma tudo que pausou por queda de net
+  private startNetWatch(): void {
+    if (this.netWatch) return
+    this.netWatch = setInterval(() => {
+      if (!net.isOnline()) return
+      clearInterval(this.netWatch)
+      this.netWatch = undefined
+      const ids = [...this.networkPaused]
+      this.networkPaused.clear()
+      for (const id of ids) this.resume(id)
+    }, 8000)
+  }
+
+  private async startTask(task: Task): Promise<void> {
     this.running++
     this.host.setStatus(task.id, 'downloading')
     task.paused = false
     task.lastSpeedAt = 0
     task.lastBytes = 0
 
+    const rt = await this.jsRuntimeArgs()
     const args = [
       '--newline', '--no-warnings', '--no-playlist',
       '--concurrent-fragments', '4',
+      ...rt,
       '-o', join(task.dir, '%(title).170B.%(ext)s'),
       task.url
     ]
@@ -360,6 +403,15 @@ export class MediaHandler {
         // yt-dlp guarda o .part: ao retomar, continua do ponto
         return
       }
+      if (code !== 0 && isNetError(stderr)) {
+        // rede caiu: pausa em vez de falhar; o vigia retoma quando a net volta
+        task.paused = true
+        this.networkPaused.add(task.id)
+        this.host.setStatus(task.id, 'paused')
+        this.startNetWatch()
+        this.pump()
+        return
+      }
       task.done = true
       if (code === 0) {
         this.host.finishItem(task.id, 'completed', { savePath: task.finalPath })
@@ -401,6 +453,7 @@ export class MediaHandler {
     const task = this.tasks.get(id)
     if (!task) return false
     task.cancelled = true
+    this.networkPaused.delete(id)
     const pendingIdx = this.pending.indexOf(id)
     if (pendingIdx !== -1) this.pending.splice(pendingIdx, 1)
     if (task.done) return false

@@ -1,5 +1,6 @@
 import { mkdirSync, openSync, closeSync, writeSync, existsSync, statSync, unlinkSync } from 'fs'
 import { dirname } from 'path'
+import { isNetError } from './net'
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
@@ -26,6 +27,7 @@ export class SegmentedDownloader {
   private lastSpeedReceived = 0
   private onUpdate: (speed: number, received: number) => void = () => {}
   private onDoneCallback: (err?: string) => void = () => {}
+  private onPausedCallback: () => void = () => {}
   private running = false
   speed = 0
 
@@ -61,9 +63,14 @@ export class SegmentedDownloader {
     }
   }
 
-  async start(onUpdate: (s: number, r: number) => void, onDone: (err?: string) => void): Promise<void> {
+  async start(
+    onUpdate: (s: number, r: number) => void,
+    onDone: (err?: string) => void,
+    onPaused?: () => void
+  ): Promise<void> {
     this.onUpdate = onUpdate
     this.onDoneCallback = onDone
+    if (onPaused) this.onPausedCallback = onPaused
 
     // restos de tentativa anterior com layout de partes diferente: começar do zero
     if (existsSync(this.savePath) && statSync(this.savePath).size !== this.total) {
@@ -90,7 +97,12 @@ export class SegmentedDownloader {
     await Promise.all(pending.map((p) => this.runPart(p, (msg) => (failure ??= msg))))
 
     this.running = false
-    if (failure) {
+    if (failure && !this.cancelled && !this.paused && isNetError(failure)) {
+      // rede caiu: os segmentos guardam o pos, o vigia de rede retoma
+      this.paused = true
+      this.speed = 0
+      this.onPausedCallback?.()
+    } else if (failure) {
       this.closeFd()
       this.done = true
       this.onDoneCallback(failure)
@@ -138,7 +150,7 @@ export class SegmentedDownloader {
         if (this.cancelled || this.paused) return
         retries++
         if (retries > 3) {
-          fail('Falha em uma das conexões')
+          fail(err instanceof Error ? err.message : 'Falha em uma das conexões')
           return
         }
         // vai para trás/retorna do pos

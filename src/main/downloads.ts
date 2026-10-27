@@ -1,9 +1,10 @@
-import { app, BrowserWindow, DownloadItem, dialog, ipcMain, session, shell, clipboard, Notification } from 'electron'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { app, BrowserWindow, DownloadItem, dialog, ipcMain, net, session, shell, clipboard, Notification } from 'electron'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
 import { SegmentedDownloader } from './segmented'
 import { MediaHandler, isSpotifyUrl, isMediaUrl } from './media'
+import { isNetError } from './net'
 import type { MediaHost, MediaStatus } from './host'
 
 type Status = 'pending' | 'downloading' | 'paused' | 'completed' | 'interrupted'
@@ -138,6 +139,8 @@ export class DownloadManager {
   private live = new Map<string, DownloadItem>()
   private segs = new Map<string, SegmentedDownloader>()
   private running = new Set<string>()
+  private netPaused = new Set<string>()
+  private netWatch: ReturnType<typeof setInterval> | undefined
   private queue: string[] = []
   private samples = new Map<string, { t: number; bytes: number }>()
   private captureTimer: NodeJS.Timeout | undefined
@@ -347,11 +350,18 @@ export class DownloadManager {
       return true
     }
     const live = this.live.get(id)
-    if (!live) return false
-    live.resume()
-    rec.status = 'downloading'
-    this.emit('downloading', rec)
-    return true
+    if (live) {
+      live.resume()
+      rec.status = 'downloading'
+      this.emit('downloading', rec)
+      return true
+    }
+    // pausado por queda de rede (o item do electron 'done'): recomeça
+    if (rec.status === 'paused') {
+      this.queueDownloadAgain(rec)
+      return true
+    }
+    return false
   }
 
   cancel(id: string): boolean {
@@ -366,20 +376,28 @@ export class DownloadManager {
       return true
     }
     const live = this.live.get(id)
-    if (!live) {
-      // ainda só na fila: mata direto
-      const rec = this.items.get(id)
-      if (rec && rec.status === 'pending') {
-        rec.status = 'interrupted'
-        rec.error = 'Cancelado da fila'
-        this.queue = this.queue.filter((q) => q !== id)
-        this.finish(rec)
-        return true
-      }
-      return false
+    if (live) {
+      live.cancel()
+      return true
     }
-    live.cancel()
-    return true
+    // pausado por queda de rede: mata direto
+    const rec = this.items.get(id)
+    if (rec && rec.status === 'paused') {
+      rec.status = 'interrupted'
+      rec.error = 'Cancelado pelo usuário'
+      this.netPaused.delete(id)
+      this.finish(rec)
+      return true
+    }
+    const recQueue = this.items.get(id)
+    if (recQueue && recQueue.status === 'pending') {
+      recQueue.status = 'interrupted'
+      recQueue.error = 'Cancelado da fila'
+      this.queue = this.queue.filter((q) => q !== id)
+      this.finish(recQueue)
+      return true
+    }
+    return false
   }
 
   remove(id: string): boolean {
@@ -499,13 +517,30 @@ export class DownloadManager {
                 info.receivedBytes = probe.total
               }
               this.finish(info)
+            },
+            () => {
+              // rede caiu: segmentos guardam o pos, o vigia retoma
+              info.status = 'paused'
+              info.speed = 0
+              this.emit('paused', info)
+              this.netPaused.add(info.id)
+              this.startNetWatch()
             }
           )
           .catch((err) => {
             this.segs.delete(info.id)
             this.running.delete(info.id)
+            const msg = err instanceof Error ? err.message : 'Falha no download'
+            if (isNetError(msg)) {
+              // rede caiu no arranque: pausa e o vigia retoma
+              info.status = 'paused'
+              this.emit('paused', info)
+              this.netPaused.add(info.id)
+              this.startNetWatch()
+              return
+            }
             info.status = 'interrupted'
-            info.error = err instanceof Error ? err.message : 'Falha no download'
+            info.error = msg
             this.finish(info)
           })
         return
@@ -603,12 +638,67 @@ export class DownloadManager {
       info.finishedAt = Date.now()
       if (state === 'completed') {
         info.status = 'completed'
+      } else if (state === 'interrupted' && item.canResume()) {
+        // rede caiu: pausa em vez de falhar; o vigia retoma quando a net volta
+        info.status = 'paused'
+        info.error = undefined
+        this.emit('paused', info)
+        this.netPaused.add(info.id)
+        this.startNetWatch()
+        return
       } else {
         info.status = 'interrupted'
         info.error = state === 'cancelled' ? 'Cancelado pelo usuário' : 'Falha no download'
       }
       this.finish(info)
     })
+  }
+
+  // vigia a rede: retoma os downloads pausados por queda de net
+  private startNetWatch(): void {
+    if (this.netWatch) return
+    this.netWatch = setInterval(() => {
+      if (!net.isOnline()) return
+      clearInterval(this.netWatch)
+      this.netWatch = undefined
+      const ids = [...this.netPaused]
+      this.netPaused.clear()
+      for (const id of ids) this.reviveAfterNet(id)
+    }, 8000)
+  }
+
+  private reviveAfterNet(id: string): void {
+    const info = this.items.get(id)
+    if (!info || info.status !== 'paused') return
+    const seg = this.segs.get(id)
+    if (seg && seg.isPaused()) {
+      // segmentado: retoma exatamente do pos de cada segmento
+      void seg.resume().then(() => {
+        info.status = 'downloading'
+        info.speed = 0
+        this.emit('downloading', info)
+      })
+      return
+    }
+    // sem segmentos ou seg terminou: recomeça limpo (apaga resto parcial)
+    this.queueDownloadAgain(info)
+  }
+
+  private queueDownloadAgain(info: DownloadInfo): void {
+    this.segs.delete(info.id)
+    try {
+      if (info.savePath && existsSync(info.savePath)) unlinkSync(info.savePath)
+    } catch {
+      // ficheiro preso, o engine vai renomear
+    }
+    info.status = 'pending'
+    info.error = undefined
+    info.speed = 0
+    info.receivedBytes = 0
+    info.savePath = ''
+    this.queue.push(info.id)
+    this.emit('pending', info)
+    this.startQueue()
   }
 
   private finish(info: DownloadInfo): void {
