@@ -87,13 +87,20 @@ export class MediaHandler {
 
   private async ensureBin(): Promise<string> {
     if (this.bin) return this.bin
-    // 1. binario baixado antes
-    try {
-      const p = await this.localPath()
-      this.bin = p
-      return p
-    } catch {
-      // segue
+    // 1. binario baixado antes — mas so vale se executa de verdade
+    const local = join(app.getPath('userData'), 'ytdlp', 'yt-dlp.exe')
+    if (existsSync(local)) {
+      if (await this.spawnsOk(local)) {
+        this.bin = local
+        return local
+      }
+      // ficheiro corrompido/0 bytes de tentativa anterior: apaga e baixa de novo
+      try {
+        const { unlinkSync } = await import('fs')
+        unlinkSync(local)
+      } catch {
+        throw new Error('O yt-dlp antigo está bloqueado pelo Windows (fecha o app e abre outra vez)')
+      }
     }
     // 2. yt-dlp instalado no sistema (pip, scoop...)
     const found = await new Promise<string | null>((resolve) => {
@@ -110,8 +117,10 @@ export class MediaHandler {
       this.bin = found
       return found
     }
-    // 3. baixa da release oficial
-    throw new Error('Não consegui obter o yt-dlp (verifica a internet e tenta de novo)')
+    // 3. baixa da release oficial (e confere que executa)
+    await this.downloadBinOnce()
+    if (!this.bin) throw new Error('Não consegui baixar o yt-dlp (verifica a internet e tenta de novo)')
+    return this.bin
   }
 
   async downloadBinOnce(): Promise<void> {

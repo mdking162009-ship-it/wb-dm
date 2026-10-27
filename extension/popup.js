@@ -31,7 +31,7 @@ function buildToggle(container, group, key, label) {
   container.appendChild(row)
 }
 
-async function init(): Promise<void> {
+async function init() {
   const saved = (await chrome.storage.sync.get(['sites', 'tipos'])) ?? {}
   const sites = { ...DEFAULTS.sites, ...(saved.sites ?? {}) }
   const tipos = { ...DEFAULTS.tipos, ...(saved.tipos ?? {}) }
