@@ -79,12 +79,6 @@ export class MediaHandler {
   // localizar ou baixar o yt-dlp
   // ---------------------------------------------------------------
 
-  private async localPath(): Promise<string> {
-    const p = join(app.getPath('userData'), 'ytdlp', 'yt-dlp.exe')
-    if (existsSync(p)) return p
-    throw new Error('yt-dlp ainda não foi baixado')
-  }
-
   private async ensureBin(): Promise<string> {
     if (this.bin) return this.bin
     // 1. binario baixado antes — mas so vale se executa de verdade

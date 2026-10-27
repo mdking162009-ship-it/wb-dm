@@ -47,6 +47,11 @@ export function startCaptureServer(dm: DownloadManager): void {
           // corpo invalido
         }
         // auto=false: a extensao quer que o app pergunte antes ("Baixar todos / Descartar")
+        if (!dm.getSettings().browserServer) {
+          res.writeHead(403, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: 'integração desligada nas Definições' }))
+          return
+        }
         if (auto) void dm.addUrls(urls)
         else dm.propose(urls)
         res.writeHead(202, { 'Content-Type': 'application/json' })

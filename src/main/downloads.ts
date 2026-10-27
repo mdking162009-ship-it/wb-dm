@@ -16,6 +16,9 @@ export interface AppSettings {
   captureClipboard: boolean
   captureAutoDownload: boolean
   checkUpdates: boolean
+  notifyDone: boolean
+  notifyFail: boolean
+  browserServer: boolean
 }
 
 const DEFAULTS: AppSettings = {
@@ -25,7 +28,10 @@ const DEFAULTS: AppSettings = {
   segments: 8,
   captureClipboard: false,
   captureAutoDownload: false,
-  checkUpdates: true
+  checkUpdates: true,
+  notifyDone: true,
+  notifyFail: true,
+  browserServer: true
 }
 
 export interface DownloadInfo {
@@ -63,8 +69,12 @@ const FOLDERS: Record<string, string> = {
   outros: 'Outros'
 }
 
-function extOf(url: string): string {
-  try {
+// cancelamentos feitos pelo usuario nao valem notificacao de falha
+function silentInterrupt(err?: string): boolean {
+  return !err || /cancelado/i.test(err)
+}
+
+function extOf(url: string): string {  try {
     const path = decodeURIComponent(new URL(url).pathname)
     return path.includes('.') ? (path.split('.').pop()?.toLowerCase() ?? '') : ''
   } catch {
@@ -603,14 +613,22 @@ export class DownloadManager {
 
   private finish(info: DownloadInfo): void {
     this.emit(info.status === 'completed' ? 'completed' : 'interrupted', info)
-    // aviso flutuante do windows quando termina (baixar automatico: sem perguntas, so o fim)
-    if (info.status === 'completed' && Notification.isSupported()) {
+    // avisos flutuantes do windows: fim (e falha, se escolhido)
+    if (info.status === 'completed' && this.settings.notifyDone && Notification.isSupported()) {
       const n = new Notification({
         title: 'WB-DM — Download concluído',
-        body: `${info.filename} salvou em ${this.folder}`,
+        body: `${info.filename} salvo em ${this.folder}`,
         icon: join(__dirname, '../../build/icon.ico')
       })
       n.on('click', () => shell.showItemInFolder(info.savePath || this.folder))
+      n.show()
+    } else if (info.status === 'interrupted' && this.settings.notifyFail && Notification.isSupported() && !silentInterrupt(info.error)) {
+      const n = new Notification({
+        title: 'WB-DM — Download falhou',
+        body: `${info.filename}: ${info.error ?? 'erro desconhecido'}`,
+        icon: join(__dirname, '../../build/icon.ico')
+      })
+      n.on('click', () => BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && w.isVisible())?.focus())
       n.show()
     }
     this.byUrl.delete(info.url)

@@ -683,6 +683,28 @@ export default function App(): React.JSX.Element {
               hint="Sem pedir confirmação"
             />
 
+            <h3>Avisos</h3>
+            <Switch
+              checked={settings.notifyDone}
+              onChange={(v): Promise<void> => saveSettings({ notifyDone: v })}
+              label="Avisar quando um download termina"
+              hint="Notificação do Windows com o ficheiro salvo — clicando abre a pasta"
+            />
+            <Switch
+              checked={settings.notifyFail}
+              onChange={(v): Promise<void> => saveSettings({ notifyFail: v })}
+              label="Avisar quando um download falha"
+              hint="Notificações de falha (cancelamentos não conta)"
+            />
+
+            <h3>Extensão do navegador</h3>
+            <Switch
+              checked={settings.browserServer}
+              onChange={(v): Promise<void> => saveSettings({ browserServer: v })}
+              label="Aceitar links da extensão"
+              hint="Servidor local em 127.0.0.1:28123 — nada sai do teu PC"
+            />
+
             <h3>Apoiar o projecto</h3>
             <div className="donate-row">
               <div className="donate-text">

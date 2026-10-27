@@ -29,6 +29,9 @@ export interface AppSettingsInfo {
   captureClipboard: boolean
   captureAutoDownload: boolean
   checkUpdates: boolean
+  notifyDone: boolean
+  notifyFail: boolean
+  browserServer: boolean
 }
 
 const api = {
