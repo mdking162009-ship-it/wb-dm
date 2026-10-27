@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "WB-DM — gerenciador de downloads multi-conexão (segmentado)",
   "main": "./out/main/index.js",
-  "author": "Yuggo Luis",
+  "author": "Mamona Ginga",
   "homepage": "https://electron-vite.org",
   "scripts": {
     "format": "prettier --write .",
