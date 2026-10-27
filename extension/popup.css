@@ -1,7 +1,6 @@
 body {
   margin: 0;
-  width: 620px;
-  height: 540px;
+  width: 400px;
   font-family: 'Segoe UI', system-ui, sans-serif;
   background: #0a0c10;
   color: #eef0f6;
@@ -9,42 +8,41 @@ body {
 }
 
 .panel {
-  margin: 0;
   height: 100%;
   display: flex;
   flex-direction: column;
   background: #14161d;
-  border-radius: 16px;
+  border-radius: 14px;
   border: 1px solid #23262e;
-  padding: 14px 18px 8px;
+  padding: 10px 12px 6px;
   box-sizing: border-box;
 }
 
 .head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 .logo {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
   border: 2px solid #4a7ce0;
 }
 
 .app-title {
   flex: 1;
   text-align: center;
-  font-size: 17px;
+  font-size: 13px;
   font-weight: 500;
-  margin-left: -56px; /* compensa o logo pra título ficar centrado de facto */
+  margin-left: -38px;
 }
 
 .state {
-  font-size: 10px;
-  padding: 3px 8px;
+  font-size: 9px;
+  padding: 2px 7px;
   border-radius: 20px;
   background: #23262e;
   color: #8b90a0;
@@ -54,15 +52,12 @@ body {
 .state.off { background: #301717; color: #ff8080; }
 
 .split {
-  flex: 1;
   display: flex;
-  gap: 0;
-  min-height: 0;
 }
 
 .col {
   flex: 1;
-  padding: 0 16px;
+  padding: 0 10px;
   min-width: 0;
 }
 
@@ -74,10 +69,10 @@ body {
 
 .col h2,
 .links h2 {
-  font-size: 13.5px;
+  font-size: 12px;
   font-weight: 500;
   text-align: center;
-  margin: 4px 0 12px;
+  margin: 2px 0 8px;
   color: #e8eaf2;
 }
 
@@ -85,18 +80,18 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 2px;
+  padding: 4px 2px;
 }
 
 .row span {
-  font-size: 13px;
+  font-size: 11.5px;
 }
 
 /* interruptor do prototipo: pista clara, botao azul-escuro */
 .sw {
   position: relative;
-  width: 46px;
-  height: 20px;
+  width: 36px;
+  height: 16px;
   flex: none;
 }
 
@@ -116,25 +111,25 @@ body {
 .sw .track::after {
   content: '';
   position: absolute;
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   top: 2px;
   background: #b9bde8;
   transition: transform 0.15s;
 }
 
-/* ligado: botao fica a direita e pista clara */
+/* ligado: botao a direita, pista clara */
 .sw input:checked + .track {
   background: #c7c9f2;
 }
 
 .sw input:checked + .track::after {
   background: #232a55;
-  transform: translateX(26px);
+  transform: translateX(20px);
 }
 
-/* desligado: botao fica a esquerda, pista escura */
+/* desligado: botao a esquerda */
 .sw input:not(:checked) + .track::after {
   left: 2px;
 }
@@ -142,15 +137,15 @@ body {
 .links {
   margin-top: auto;
   border-top: 1px solid #23262e;
-  padding-top: 10px;
+  padding-top: 7px;
 }
 
 .links a {
   display: block;
   color: #eef0f6;
   text-decoration: none;
-  font-size: 13px;
-  padding: 5px 2px;
+  font-size: 11.5px;
+  padding: 3px 2px;
 }
 
 .links a:hover {
@@ -160,7 +155,7 @@ body {
 .foot {
   margin: 0;
   text-align: right;
-  font-size: 9px;
+  font-size: 8.5px;
   color: #6d7280;
-  padding-top: 6px;
+  padding-top: 5px;
 }

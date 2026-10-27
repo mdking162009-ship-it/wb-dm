@@ -1,5 +1,6 @@
 appId: com.mamona.wbdm
 productName: WB-DM
+copyright: Copyright © 2026 Mamona Ginga
 directories:
   buildResources: build
 files:
@@ -17,7 +18,22 @@ nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
-  createDesktopShortcut: always
+  # instalador guiado (nao one-click): licenca, pasta, atalhos
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  # licença MIT no início, com o botão "Aceito"
+  license: LICENSE
+  # atalhos: desktop + menu iniciar, e o usuario decide
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  menuCategory: false
+  # "executa ao terminar a instalacao"
+  runAfterFinish: true
+  # idioma por defeito + displayLanguagesSelector
+  installerLanguages: [pt_BR, pt_PT, en_US]
+  language: '1046'
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
