@@ -1,13 +1,14 @@
 // downloads de midia (youtube, pinterest, instagram, facebook, tiktok, soundcloud)
 // via yt-dlp: suporta videos paginas completas e playlists
 import { spawn, ChildProcess } from 'child_process'
-import { existsSync, mkdirSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, writeFileSync, unlinkSync, readdirSync } from 'fs'
 import { join } from 'path'
 import { app, net } from 'electron'
 import { isNetError } from './net'
 import type { MediaHost } from './host'
 
 const YTDLP_URL = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
+const FFMPEG_URL = 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip'
 
 function hostOf(url: string): string {
   try {
@@ -118,6 +119,48 @@ export class MediaHandler {
     await this.downloadBinOnce()
     if (!this.bin) throw new Error('Não consegui baixar o yt-dlp (verifica a internet e tenta de novo)')
     return this.bin
+  }
+
+  // ffmpeg: junta vídeo+áudio (youtube separa as faixas); baixa uma vez só
+  private ffmpegTried = false
+
+  private async ensureFfmpeg(): Promise<string | null> {
+    const dir = join(app.getPath('userData'), 'ffmpeg')
+    const exe = join(dir, 'ffmpeg.exe')
+    if (existsSync(exe)) return exe
+    if (this.ffmpegTried) return null
+    this.ffmpegTried = true
+    try {
+      mkdirSync(dir, { recursive: true })
+      const zipPath = join(dir, 'ffmpeg.zip')
+      const res = await fetch(FFMPEG_URL)
+      if (!res.ok) return null
+      writeFileSync(zipPath, Buffer.from(await res.arrayBuffer()))
+      // o windows tem deszipador de serie: Expand-Archive
+      await new Promise<void>((resolve) => {
+        const ps = spawn(
+          'powershell',
+          ['-NoProfile', '-Command', `Expand-Archive -Force -LiteralPath '${zipPath}' -DestinationPath '${dir}'`],
+          { windowsHide: true }
+        )
+        ps.on('close', () => resolve())
+        ps.on('error', () => resolve())
+      })
+      try { unlinkSync(zipPath) } catch { /* segue */ }
+      // procura ffmpeg.exe (o zip vem numa subpasta com o nº da versão)
+      const stack = [dir]
+      while (stack.length > 0) {
+        const cur = stack.pop() as string
+        for (const e of readdirSync(cur, { withFileTypes: true })) {
+          const p = join(cur, e.name)
+          if (e.isDirectory()) stack.push(p)
+          else if (e.name.toLowerCase() === 'ffmpeg.exe') return p
+        }
+      }
+    } catch {
+      // sem ffmpeg: os vídeos saem sem juntar, mas não é falha do download
+    }
+    return null
   }
 
   async downloadBinOnce(): Promise<void> {
@@ -344,10 +387,12 @@ export class MediaHandler {
     task.lastBytes = 0
 
     const rt = await this.jsRuntimeArgs()
+    const ff = await this.ensureFfmpeg()
     const args = [
       '--newline', '--no-warnings', '--no-playlist',
       '--concurrent-fragments', '4',
       ...rt,
+      ...(ff ? ['--ffmpeg-location', ff] : []),
       '-o', join(task.dir, '%(title).170B.%(ext)s'),
       task.url
     ]
