@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "WB-DM",
+  "description": "Baixar links, vídeos e imagens com o WB-DM (White Black Download Manager)",
+  "version": "1.0.0",
+  "permissions": ["contextMenus", "storage", "notifications"],
+  "host_permissions": ["http://127.0.0.1:28123/*", "http://localhost:28123/*"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html" },
+  "icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" }
+}

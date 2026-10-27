@@ -168,6 +168,8 @@ export default function App(): React.JSX.Element {
   const [captureOn, setCaptureOn] = useState(false)
   const [toast, setToast] = useState<LinkGuess[] | null>(null)
   const [guess, setGuess] = useState<LinkGuess | null>(null)
+  const [upd, setUpd] = useState<{ latest: string; url?: string } | null>(null)
+  const [updMsg, setUpdMsg] = useState('')
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
@@ -186,9 +188,13 @@ export default function App(): React.JSX.Element {
       setItems((cur) => merge(cur, item))
     )
     const offCaptured = window.api.onCapturedLinks((links) => setToast(links))
+    const offUpd = window.api.onUpdateFound((info) => {
+      if (info.hasUpdate) setUpd({ latest: info.latest, url: info.url })
+    })
     return () => {
       offDl()
       offCaptured()
+      offUpd()
     }
   }, [])
 
@@ -472,6 +478,28 @@ export default function App(): React.JSX.Element {
         </span>
       </div>
 
+      {/* aviso de nova versão */}
+      {upd && (
+        <div className="toast upd-toast">
+          <div className="toast-head">
+            <RefreshCw size={14} />
+            <strong>Nova versão {upd.latest} disponível</strong>
+            <button className="close" onClick={(): void => setUpd(null)}>
+              <X size={12} />
+            </button>
+          </div>
+          <p>WB-DM {upd.latest} já está no GitHub — baixa a atualização quando quiseres.</p>
+          <div className="toast-actions">
+            <button onClick={(): void => setUpd(null)}>Mais tarde</button>
+            {upd.url ? (
+              <a className="primary upd-link" href={upd.url} target="_blank" rel="noreferrer">
+                Abrir página
+              </a>
+            ) : null}
+          </div>
+        </div>
+      )}
+
       {/* toast do capturador */}
       {toast && toast.length > 0 && (
         <div className="toast">
@@ -613,6 +641,33 @@ export default function App(): React.JSX.Element {
                 ))}
               </select>
             </label>
+
+            <h3>Actualizações</h3>
+            <Switch
+              checked={settings.checkUpdates}
+              onChange={(v): Promise<void> => saveSettings({ checkUpdates: v })}
+              label="Procurar atualizações automaticamente"
+              hint="Avisa no app quando houver versão nova no GitHub"
+            />
+            <div className="setting-row upd-check-row">
+              <button
+                className="tb"
+                onClick={async (): Promise<void> => {
+                  setUpdMsg('A verificar...')
+                  const info = await window.api.checkForUpdate()
+                  setUpdMsg(
+                    info.hasUpdate
+                      ? `Nova versão: ${info.latest}. Baixa em releases do GitHub`
+                      : `Estás na versão mais recente (${info.current})`
+                  )
+                  if (info.hasUpdate) setUpd({ latest: info.latest, url: info.url })
+                  setTimeout(() => setUpdMsg(''), 8000)
+                }}
+              >
+                <RefreshCw size={13} /> Verificar agora
+              </button>
+              {updMsg && <small className="upd-msg">{updMsg}</small>}
+            </div>
 
             <h3>Capturador de links</h3>
             <Switch

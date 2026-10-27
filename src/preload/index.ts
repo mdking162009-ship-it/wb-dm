@@ -28,6 +28,7 @@ export interface AppSettingsInfo {
   segments: number
   captureClipboard: boolean
   captureAutoDownload: boolean
+  checkUpdates: boolean
 }
 
 const api = {
@@ -49,6 +50,15 @@ const api = {
   setSettings: (patch: Partial<AppSettingsInfo>): Promise<AppSettingsInfo> =>
     ipcRenderer.invoke('settings:set', patch),
   guessLink: (url: string): Promise<LinkGuess | null> => ipcRenderer.invoke('links:guess', url),
+  checkForUpdate: (): Promise<{ hasUpdate: boolean; latest: string; current: string; url?: string }> =>
+    ipcRenderer.invoke('update:check'),
+  onUpdateFound: (cb: (info: { hasUpdate: boolean; latest: string; current: string; url?: string }) => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, payload) => cb(payload)
+    ipcRenderer.on('update:found', listener)
+    return (): void => {
+      ipcRenderer.removeListener('update:found', listener)
+    }
+  },
   onDownloadEvent: (cb: (evt: { type: string; item: DownloadItemInfo }) => void) => {
     const listener = (_e: Electron.IpcRendererEvent, payload) => cb(payload)
     ipcRenderer.on('download:event', listener)

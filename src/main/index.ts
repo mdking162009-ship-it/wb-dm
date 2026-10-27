@@ -3,6 +3,8 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { DownloadManager, registerDownloadIpc } from './downloads'
+import { registerUpdateIpc, startAutoUpdates } from './updater'
+import { startCaptureServer } from './server'
 
 let dm: DownloadManager
 
@@ -57,6 +59,9 @@ app.whenReady().then(() => {
 
   dm = new DownloadManager()
   registerDownloadIpc(dm)
+  registerUpdateIpc()
+  startAutoUpdates()
+  startCaptureServer(dm) // integração com navegador: a extensão manda links pra cá
 
   createWindow()
 

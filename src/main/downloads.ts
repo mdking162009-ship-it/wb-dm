@@ -3,6 +3,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
 import { SegmentedDownloader } from './segmented'
+import { MediaHandler, isSpotifyUrl, isMediaUrl } from './media'
+import type { MediaHost, MediaStatus } from './host'
 
 type Status = 'pending' | 'downloading' | 'paused' | 'completed' | 'interrupted'
 
@@ -13,6 +15,7 @@ export interface AppSettings {
   segments: number
   captureClipboard: boolean
   captureAutoDownload: boolean
+  checkUpdates: boolean
 }
 
 const DEFAULTS: AppSettings = {
@@ -21,7 +24,8 @@ const DEFAULTS: AppSettings = {
   maxConcurrent: 3,
   segments: 8,
   captureClipboard: false,
-  captureAutoDownload: false
+  captureAutoDownload: false,
+  checkUpdates: true
 }
 
 export interface DownloadInfo {
@@ -128,12 +132,35 @@ export class DownloadManager {
   private samples = new Map<string, { t: number; bytes: number }>()
   private captureTimer: NodeJS.Timeout | undefined
   private lastClipboard = ''
+  private media: MediaHandler
 
   constructor() {
     this.folder = this.loadFolder()
     this.settings = this.loadSettings()
     // referencia ao DownloadItem é necessária pro pause/resume
     session.defaultSession.on('will-download', (_e, item) => this.onWillDownload(item))
+    // se o capturador ficou ligado na sessão anterior, reativa o timer
+    this.syncCapture()
+    // motor de mídia (yt-dlp) com acesso à lista principal
+    const host: MediaHost = {
+      registerItem: (url, filename, category, note) => this.registerItem(url, filename, category, note),
+      setStatus: (id, status, patch) => this.setMediaStatus(id, status, patch),
+      finishItem: (id, status, extra) => this.finishMediaItem(id, status, extra),
+      spareSlots: () => this.settings.maxConcurrent - this.running.size
+    }
+    this.media = new MediaHandler(host)
+    // baixa o yt-dlp em segundo plano pra primeira mídia não esperar
+    this.media.preloadBin()
+  }
+
+  mediaHandles(url: string): boolean {
+    return this.media.handles(url)
+  }
+
+  mediaCategory(url: string): string {
+    if (isSpotifyUrl(url)) return 'audios'
+    if (/pinterest|pin\.it/i.test(url) && /\.jpg|jpeg|png|webp/i.test(url)) return 'imagens'
+    return isMediaUrl(url) ? 'videos' : 'outros'
   }
 
   attachWindow(win: BrowserWindow): void {
@@ -196,10 +223,86 @@ export class DownloadManager {
     })
   }
 
+  // -------------------------------------------------------------------
+  // itens vindos do motor de mídia
+  // -------------------------------------------------------------------
+
+  private registerItem(
+    url: string,
+    filename: string,
+    category: string,
+    note?: string
+  ): DownloadInfo | null {
+    const known = this.byUrl.get(url)
+    if (known && !['completed', 'interrupted'].includes(known.status)) return null
+    const dir = this.settings.subfolders
+      ? join(this.folder, FOLDERS[category] ?? FOLDERS.outros)
+      : this.folder
+    const item: DownloadInfo = {
+      id: randomUUID(),
+      url,
+      filename: safeName(filename),
+      category,
+      dir,
+      savePath: '',
+      status: note ? 'interrupted' : 'pending',
+      receivedBytes: 0,
+      totalBytes: 0,
+      speed: 0,
+      startedAt: Date.now(),
+      error: note
+    }
+    this.items.set(item.id, item)
+    this.byUrl.set(url, item)
+    this.emit('added', item)
+    if (note) this.finish(item)
+    return item
+  }
+
+  private setMediaStatus(
+    id: string,
+    status: MediaStatus,
+    patch?: Partial<Pick<DownloadInfo, 'receivedBytes' | 'totalBytes' | 'speed'>>
+  ): void {
+    const rec = this.items.get(id)
+    if (!rec) return
+    if (patch) {
+      if (patch.receivedBytes !== undefined) rec.receivedBytes = patch.receivedBytes
+      if (patch.totalBytes !== undefined) rec.totalBytes = patch.totalBytes
+      if (patch.speed !== undefined) rec.speed = patch.speed
+    }
+    rec.status = status
+    this.emit(status, rec)
+  }
+
+  private finishMediaItem(
+    id: string,
+    status: 'completed' | 'interrupted',
+    extra?: { savePath?: string; error?: string }
+  ): void {
+    const rec = this.items.get(id)
+    if (!rec) return
+    rec.status = status
+    if (extra?.savePath) rec.savePath = extra.savePath
+    if (extra?.error) rec.error = extra.error
+    rec.speed = 0
+    rec.finishedAt = Date.now()
+    if (status === 'completed') rec.receivedBytes = rec.totalBytes || rec.receivedBytes
+    this.finish(rec)
+  }
+
   pause(id: string): boolean {
     const rec = this.items.get(id)
     if (!rec) return false
-    // segmentado tem caminho próprio, depois os herdados do electron
+    // mídia tem caminho próprio (yt-dlp), depois o segmentado, depois os herdados do electron
+    if (this.media.owns(id)) {
+      if (this.media.pause(id)) {
+        rec.status = 'paused'
+        this.emit('paused', rec)
+        return true
+      }
+      return false
+    }
     const seg = this.segs.get(id)
     if (seg) {
       seg.pause()
@@ -218,6 +321,14 @@ export class DownloadManager {
   resume(id: string): boolean {
     const rec = this.items.get(id)
     if (!rec) return false
+    if (this.media.owns(id)) {
+      if (this.media.resume(id)) {
+        rec.status = 'downloading'
+        this.emit('downloading', rec)
+        return true
+      }
+      return false
+    }
     const seg = this.segs.get(id)
     if (seg) {
       seg.resume()
@@ -234,6 +345,11 @@ export class DownloadManager {
   }
 
   cancel(id: string): boolean {
+    // primeiro o motor de mídia; ele marca o item como interrompido sozinho
+    if (this.media.owns(id)) {
+      this.media.cancel(id)
+      return true
+    }
     const seg = this.segs.get(id)
     if (seg) {
       seg.cancel()
@@ -266,7 +382,7 @@ export class DownloadManager {
     return true
   }
 
-  addUrls(raw: string[]): { added: DownloadInfo[]; invalid: string[] } {
+  async addUrls(raw: string[]): Promise<{ added: DownloadInfo[]; invalid: string[] }> {
     const added: DownloadInfo[] = []
     const invalid: string[] = []
 
@@ -286,6 +402,12 @@ export class DownloadManager {
       const running = this.byUrl.get(url)
       if (running && ['pending', 'downloading', 'paused'].includes(running.status)) {
         invalid.push(url)
+        continue
+      }
+
+      // mídia (youtube/pinterest/instagram/facebook...): vai pro motor do yt-dlp
+      if (this.media.handles(url)) {
+        void this.media.enqueue(url).catch(() => {})
         continue
       }
 
@@ -485,7 +607,10 @@ export class DownloadManager {
     this.startQueue()
   }
 
-  private emit(type: 'added' | 'downloading' | 'paused' | 'completed' | 'interrupted', rec: DownloadInfo): void {
+  private emit(
+    type: 'added' | 'downloading' | 'paused' | 'pending' | 'completed' | 'interrupted',
+    rec: DownloadInfo
+  ): void {
     // a janela principal é a única visível, as de download ficam escondidas
     const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && w.isVisible())
     if (win && !win.webContents.isDestroyed()) {
@@ -541,7 +666,7 @@ export class DownloadManager {
     if (guesses.length === 0) return
 
     if (this.settings.captureAutoDownload) {
-      this.addUrls(urls)
+      await this.addUrls(urls)
       return
     }
     const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && w.isVisible())
@@ -622,5 +747,15 @@ export function registerDownloadIpc(dm: DownloadManager): void {
   ipcMain.handle('downloads:remove', (_e, id: string) => dm.remove(id))
   ipcMain.handle('settings:get', () => dm.getSettings())
   ipcMain.handle('settings:set', (_e, patch) => dm.setSettings(patch))
-  ipcMain.handle('links:guess', (_e, url: string) => guessInfo(url))
+  ipcMain.handle('links:guess', (_e, url: string) => {
+    // links de mídia não têm extensão no path; app já sabe o motor que vai usar
+    if (dm.mediaHandles(url)) {
+      return {
+        filename: isSpotifyUrl(url) ? 'música Spotify (DRM)' : 'mídia (vídeo/áudio)',
+        ext: 'mp4',
+        category: dm.mediaCategory(url)
+      }
+    }
+    return guessInfo(url)
+  })
 }
