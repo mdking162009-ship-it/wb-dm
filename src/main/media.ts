@@ -1,11 +1,20 @@
 // downloads de midia (youtube, pinterest, instagram, facebook, tiktok, soundcloud)
 // via yt-dlp: suporta videos paginas completas e playlists
 import { spawn, ChildProcess } from 'child_process'
-import { existsSync, mkdirSync, writeFileSync, unlinkSync, readdirSync } from 'fs'
+import { existsSync, mkdirSync, writeFileSync, unlinkSync, readdirSync, appendFileSync } from 'fs'
 import { join } from 'path'
 import { app, net } from 'electron'
 import { isNetError } from './net'
 import type { MediaHost } from './host'
+
+// trilha de auditoria: %APPDATA%\wb-dm\app.log
+function slog(msg: string): void {
+  try {
+    appendFileSync(join(app.getPath('userData'), 'app.log'), `${new Date().toISOString()} ${msg}\n`)
+  } catch {
+    // log não pode nunca quebrar o download
+  }
+}
 
 const YTDLP_URL = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
 const FFMPEG_URL = 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip'
@@ -312,8 +321,8 @@ export class MediaHandler {
       let er = ''
       const timer = setTimeout(() => {
         child.kill()
-        reject(new Error('yt-dlp demorou demais a responder ao link'))
-      }, 30_000)
+        reject(new Error('yt-dlp demorou demais a responder ao link (90 s)'))
+      }, 90_000)
       child.stdout?.on('data', (c) => (out += c))
       child.stderr?.on('data', (c) => (er += c))
       child.on('error', (e) => {
@@ -398,6 +407,7 @@ export class MediaHandler {
     ]
     const child = spawn(this.bin ?? '', args, { windowsHide: true, cwd: task.dir })
     task.child = child
+    slog(`start ${task.url.slice(0, 120)}`)
 
     child.on('error', (e) => {
       if (task.done || task.cancelled || task.paused) return
@@ -450,6 +460,7 @@ export class MediaHandler {
       }
       if (code !== 0 && isNetError(stderr)) {
         // rede caiu: pausa em vez de falhar; o vigia retoma quando a net volta
+        slog(`net-pause ${task.url.slice(0, 80)} :: ${stderr.split(/\r?\n/).pop()}`)
         task.paused = true
         this.networkPaused.add(task.id)
         this.host.setStatus(task.id, 'paused')
@@ -459,9 +470,11 @@ export class MediaHandler {
       }
       task.done = true
       if (code === 0) {
+        slog(`done ${task.finalPath ?? task.url.slice(0, 80)}`)
         this.host.finishItem(task.id, 'completed', { savePath: task.finalPath })
       } else {
         const lines = stderr.split(/\r?\n/).filter((l) => l.includes('ERROR') || l.trim().length > 0)
+        slog(`fail ${task.url.slice(0, 80)} :: ${tail(lines) || `código ${code}`}`)
         this.host.finishItem(task.id, 'interrupted', { error: `yt-dlp: ${tail(lines) || `código ${code}`}` })
       }
       this.pump()

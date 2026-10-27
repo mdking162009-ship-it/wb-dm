@@ -46,18 +46,19 @@ export class SegmentedDownloader {
     }
   }
 
-  // sondagem: o servidor aceita Range e qual o tamanho total?
-  static async probe(url: string): Promise<{ ok: boolean; total: number }> {
+  // sondagem: o servidor aceita Range e qual o tamanho total? (+ MIME pra extensão)
+  static async probe(url: string): Promise<{ ok: boolean; total: number; type?: string }> {
     try {
       const res = await fetch(url, { headers: { 'User-Agent': UA, Range: 'bytes=0-0' } })
       await res.arrayBuffer() // esvazia o corpo
+      const type = res.headers.get('content-type') ?? undefined
       const cr = res.headers.get('content-range')
       if (res.status === 206 && cr) {
         const total = Number(cr.split('/')[1])
-        if (Number.isFinite(total) && total > 0) return { ok: true, total }
+        if (Number.isFinite(total) && total > 0) return { ok: true, total, type }
       }
       const cl = res.headers.get('content-length')
-      return { ok: false, total: cl ? Number(cl) : 0 }
+      return { ok: false, total: cl ? Number(cl) : 0, type }
     } catch {
       return { ok: false, total: 0 }
     }

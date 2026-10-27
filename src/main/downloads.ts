@@ -1,11 +1,20 @@
 import { app, BrowserWindow, DownloadItem, dialog, ipcMain, net, session, shell, clipboard, Notification } from 'electron'
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, appendFileSync } from 'fs'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
 import { SegmentedDownloader } from './segmented'
 import { MediaHandler, isSpotifyUrl, isMediaUrl } from './media'
 import { isNetError } from './net'
 import type { MediaHost, MediaStatus } from './host'
+
+// trilha de auditoria: %APPDATA%\wb-dm\app.log
+function slog(msg: string): void {
+  try {
+    appendFileSync(join(app.getPath('userData'), 'app.log'), `${new Date().toISOString()} ${msg}\n`)
+  } catch {
+    // log não pode nunca quebrar o download
+  }
+}
 
 type Status = 'pending' | 'downloading' | 'paused' | 'completed' | 'interrupted'
 
@@ -75,12 +84,46 @@ function silentInterrupt(err?: string): boolean {
   return !err || /cancelado/i.test(err)
 }
 
-function extOf(url: string): string {  try {
+function extOf(url: string): string {
+  try {
     const path = decodeURIComponent(new URL(url).pathname)
     return path.includes('.') ? (path.split('.').pop()?.toLowerCase() ?? '') : ''
   } catch {
     return ''
   }
+}
+
+// URLs sem extensao (picsum/thumbs/serviços dinâmicos): o MIME do servidor resolve
+const MIME_EXT: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+  'image/avif': '.avif',
+  'image/svg+xml': '.svg',
+  'image/bmp': '.bmp',
+  'image/tiff': '.tif',
+  'application/pdf': '.pdf',
+  'application/zip': '.zip',
+  'application/x-zip-compressed': '.zip',
+  'application/x-7z-compressed': '.7z',
+  'application/x-rar-compressed': '.rar',
+  'video/mp4': '.mp4',
+  'video/webm': '.webm',
+  'video/x-msvideo': '.avi',
+  'video/quicktime': '.mov',
+  'audio/mpeg': '.mp3',
+  'audio/mp4': '.m4a',
+  'audio/ogg': '.ogg',
+  'audio/flac': '.flac',
+  'audio/wav': '.wav',
+  'audio/x-wav': '.wav',
+  'text/plain': '.txt'
+}
+
+function extFromMime(mime?: string | null): string {
+  if (!mime || typeof mime !== 'string') return ''
+  return MIME_EXT[mime.split(';')[0].trim().toLowerCase()] ?? ''
 }
 
 function catOf(url: string): string {
@@ -484,6 +527,16 @@ export class DownloadManager {
     if (this.settings.segments > 1 && !this.settings.askSave) {
       const probe = await SegmentedDownloader.probe(info.url)
       if (probe.ok && probe.total > 0) {
+        if (!info.filename.includes('.')) {
+          info.filename += extFromMime(probe.type)
+          const catNow = catOf(info.filename)
+          if (catNow !== info.category) {
+            info.category = catNow
+            info.dir = this.settings.subfolders
+              ? join(this.folder, FOLDERS[catNow] ?? FOLDERS.outros)
+              : this.folder
+          }
+        }
         const dir = this.settings.subfolders ? info.dir : this.folder
         mkdirSync(dir, { recursive: true })
         const savePath = this.dedupePath(dir, info.filename)
@@ -593,7 +646,20 @@ export class DownloadManager {
     info.status = 'downloading'
     this.running.add(info.id)
 
-    info.filename = safeName(item.getFilename())
+    // nome do servidor costuma ser melhor que o URL ("1080" sem extensao etc.)
+    let finalName = safeName(item.getFilename())
+    if (!finalName.includes('.')) {
+      finalName += extFromMime(item.getMimeType())
+    }
+    info.filename = finalName
+    // recategoriza com o nome final: imagem sem extensao no URL cai na pasta certa
+    const catNow = catOf(finalName)
+    if (catNow !== info.category) {
+      info.category = catNow
+      info.dir = this.settings.subfolders
+        ? join(this.folder, FOLDERS[catNow] ?? FOLDERS.outros)
+        : this.folder
+    }
 
     if (this.settings.askSave) {
       // deixa o usuário escolher o destino na hora
@@ -640,6 +706,7 @@ export class DownloadManager {
         info.status = 'completed'
       } else if (state === 'interrupted' && item.canResume()) {
         // rede caiu: pausa em vez de falhar; o vigia retoma quando a net volta
+        slog(`net-pause ${info.url.slice(0, 80)}`)
         info.status = 'paused'
         info.error = undefined
         this.emit('paused', info)
@@ -701,7 +768,12 @@ export class DownloadManager {
     this.startQueue()
   }
 
+  private tag(info: DownloadInfo): string {
+    return info.filename || info.url.slice(0, 60)
+  }
+
   private finish(info: DownloadInfo): void {
+    slog(`${info.status === 'completed' ? 'done' : 'fail'} (${this.tag(info)}) ${info.error ?? ''}`)
     this.emit(info.status === 'completed' ? 'completed' : 'interrupted', info)
     // avisos flutuantes do windows: fim (e falha, se escolhido)
     if (info.status === 'completed' && this.settings.notifyDone && Notification.isSupported()) {
