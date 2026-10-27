@@ -1,0 +1,37 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- fundo arredondado -->
+  <defs>
+    <clipPath id="frame">
+      <rect x="32" y="32" width="960" height="960" rx="208" ry="208"/>
+    </clipPath>
+    <linearGradient id="arrowGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5b86e5"/>
+      <stop offset="1" stop-color="#3565c0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- lado branco / lado preto -->
+  <g clip-path="url(#frame)">
+    <rect x="32" y="32" width="480" height="960" fill="#ffffff"/>
+    <rect x="512" y="32" width="480" height="960" fill="#101216"/>
+  </g>
+
+  <!-- borda -->
+  <rect x="32" y="32" width="960" height="960" rx="208" ry="208"
+        fill="none" stroke="#3565c0" stroke-width="28"/>
+
+  <!-- letra W no fundo, atravessando os dois lados -->
+  <text x="512" y="730" text-anchor="middle"
+        font-family="Segoe UI, Arial, sans-serif" font-weight="800"
+        font-size="560" fill="none" stroke="#3565c0" stroke-width="34"
+        stroke-opacity="0.55">W</text>
+
+  <!-- seta de download central (o DM) -->
+  <g fill="url(#arrowGrad)" stroke="#0e1b3a" stroke-width="20" stroke-linejoin="round">
+    <rect x="464" y="150" width="96" height="380" rx="48"/>
+    <path d="M 240 540 L 784 540 L 512 830 Z"/>
+  </g>
+
+  <!-- brilho sutil na divisao -->
+  <rect x="500" y="32" width="24" height="960" fill="#ffffff" opacity="0.35"/>
+</svg>
