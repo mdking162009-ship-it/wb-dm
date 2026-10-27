@@ -30,14 +30,14 @@ tipo e monitoriza a área de transferência para capturar links automaticamente.
 ```bash
 npm install        # dependências
 npm run dev        # modo de desenvolvimento
-npm run build:win  # instalador Windows (fica em release/)
+npm run build:win  # instalador Windows (fica em dist/)
 npm run icon       # regenera os ícones a partir de build/icon.png
 ```
 
 ## Apoiar o projecto
 
 O WB-DM é gratuito e vai continuar a ser. Se ele te poupa tempo e largura de banda,
-agradeço-te: [Paga-me um café](https://ko-fi.com/) — doa o que quiseres, se quiseres.
+podes pagar-me um café: <https://ko-fi.com/mamonamd> — doa o que quiseres, se quiseres.
 
 ## Licença
 

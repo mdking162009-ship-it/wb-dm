@@ -34,7 +34,7 @@ import type { AppSettingsInfo, DownloadItemInfo, LinkGuess } from '../../preload
 
 // onde recebes os donativos: troca pelo teu link (Buy Me a Coffee, ko-fi, PayPal)
 // quando criares a tua página de donativo
-const DONATE_URL = 'https://buymeacoffee.com/mamona'
+const DONATE_URL = 'https://ko-fi.com/mamonamd'
 const APP_VERSION = '1.0.0'
 
 const TABS = ['todos', 'videos', 'imagens', 'audios', 'documentos', 'arquivos', 'programas', 'outros'] as const
